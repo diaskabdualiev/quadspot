@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Управление сервоприводами</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1, h2, h3 {
+            color: #333;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .control-panel {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .global-controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .servo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .servo-card {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .slider-container {
+            margin: 10px 0;
+        }
+        .slider-container label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .slider-value {
+            display: inline-block;
+            width: 40px;
+            text-align: right;
+            margin-left: 10px;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 8px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #0069d9;
+        }
+        button.secondary {
+            background-color: #6c757d;
+        }
+        button.secondary:hover {
+            background-color: #5a6268;
+        }
+        button.success {
+            background-color: #28a745;
+        }
+        button.success:hover {
+            background-color: #218838;
+        }
+        .calibration-panel {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .form-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        input[type="number"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 80px;
+        }
+        input[type="text"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 150px;
+        }
+        select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 150px;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .status-connected {
+            background-color: #28a745;
+        }
+        .status-disconnected {
+            background-color: #dc3545;
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: 1px solid #ddd;
+            background-color: #f8f9fa;
+            border-radius: 4px 4px 0 0;
+            margin-right: 5px;
+        }
+        .tab.active {
+            background-color: #fff;
+            border-bottom: 1px solid #fff;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        @media (max-width: 768px) {
+            .servo-grid {
+                grid-template-columns: 1fr;
+            }
+            .form-row {
+                flex-direction: column;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Управление сервоприводами</h1>
+            <div>
+                <span id="connection-status" class="status-indicator status-disconnected"></span>
+                <span id="connection-text">Отключено</span>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="control">Управление</div>
+            <div class="tab" data-tab="calibration">Калибровка</div>
+        </div>
+
+        <!-- Панель управления -->
+        <div id="control-tab" class="tab-content active">
+            <div class="control-panel">
+                <h2>Общие параметры</h2>
+                <div class="global-controls">
+                    <div class="form-group">
+                        <label for="frequency">Частота PWM (Гц):</label>
+                        <input type="number" id="frequency" min="40" max="1000" value="50">
+                        <button onclick="setFrequency()">Применить</button>
+                    </div>
+                    <div class="button-group">
+                        <button onclick="centerAll()">Центрировать все</button>
+                        <button onclick="minAll()">Мин. все</button>
+                        <button onclick="maxAll()">Макс. все</button>
+                        <button onclick="saveSettings()" class="success">Сохранить настройки</button>
+                    </div>
+                </div>
+                
+                <h2>Сервоприводы</h2>
+                <div id="servo-grid" class="servo-grid">
+                    <!-- Сервоприводы будут динамически добавлены через JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Панель калибровки -->
+        <div id="calibration-tab" class="tab-content">
+            <div class="calibration-panel">
+                <h2>Калибровка сервоприводов</h2>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="calibration-servo">Выберите сервопривод:</label>
+                        <select id="calibration-servo">
+                            <!-- Опции будут добавлены динамически -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="servo-name">Имя сервопривода:</label>
+                        <input type="text" id="servo-name">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="min-pulse">Минимальный импульс (0°):</label>
+                        <input type="number" id="min-pulse" min="100" max="1000">
+                    </div>
+                    <div class="form-group">
+                        <label for="max-pulse">Максимальный импульс (180°):</label>
+                        <input type="number" id="max-pulse" min="100" max="1000">
+                    </div>
+                    <div class="form-group">
+                        <label for="center-offset">Коррекция центра (90°):</label>
+                        <input type="number" id="center-offset" min="-100" max="100" value="0">
+                    </div>
+                </div>
+                
+                <div class="button-group">
+                    <button onclick="applyCalibration()">Применить калибровку</button>
+                    <button class="secondary" onclick="testMinPosition()">Тест 0°</button>
+                    <button class="secondary" onclick="testCenterPosition()">Тест 90°</button>
+                    <button class="secondary" onclick="testMaxPosition()">Тест 180°</button>
+                    <button onclick="saveSettings()" class="success">Сохранить настройки</button>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <p>Инструкция по калибровке:</p>
+                    <ol>
+                        <li>Выберите сервопривод для калибровки</li>
+                        <li>Установите минимальный импульс для позиции 0°</li>
+                        <li>Установите максимальный импульс для позиции 180°</li>
+                        <li>При необходимости настройте коррекцию центра для точной позиции 90°</li>
+                        <li>Используйте тестовые кнопки для проверки позиций</li>
+                        <li>Нажмите "Применить калибровку" для сохранения настроек</li>
+                        <li>Нажмите "Сохранить настройки" для записи в энергонезависимую память</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Глобальные переменные
+        let websocket;
+        let servoConfigs = [];
+        let selectedServoIndex = 0;
+        
+        // Инициализация страницы
+        document.addEventListener('DOMContentLoaded', function() {
+            initWebSocket();
+            initTabs();
+        });
+        
+        // Функция инициализации WebSocket соединения
+        function initWebSocket() {
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${wsProtocol}//${window.location.host}/ws`;
+            
+            websocket = new WebSocket(wsUrl);
+            
+            websocket.onopen = function(event) {
+                console.log('WebSocket connection established');
+                updateConnectionStatus(true);
+                requestConfig();
+            };
+            
+            websocket.onclose = function(event) {
+                console.log('WebSocket connection closed');
+                updateConnectionStatus(false);
+                // Попытка переподключения через 2 секунды
+                setTimeout(initWebSocket, 2000);
+            };
+            
+            websocket.onerror = function(error) {
+                console.error('WebSocket error:', error);
+                updateConnectionStatus(false);
+            };
+            
+            websocket.onmessage = function(event) {
+                handleWebSocketMessage(event);
+            };
+        }
+        
+        // Обновление индикатора состояния соединения
+        function updateConnectionStatus(connected) {
+            const statusIndicator = document.getElementById('connection-status');
+            const statusText = document.getElementById('connection-text');
+            
+            if (connected) {
+                statusIndicator.className = 'status-indicator status-connected';
+                statusText.textContent = 'Подключено';
+            } else {
+                statusIndicator.className = 'status-indicator status-disconnected';
+                statusText.textContent = 'Отключено';
+            }
+        }
+        
+        // Запрос текущей конфигурации
+        function requestConfig() {
+            const message = {
+                command: 'getConfig'
+            };
+            sendWebSocketMessage(message);
+        }
+        
+        // Обработка сообщений от сервера
+        function handleWebSocketMessage(event) {
+            try {
+                const data = JSON.parse(event.data);
+                
+                if (data.servos) {
+                    // Обновление конфигурации сервоприводов
+                    servoConfigs = data.servos;
+                    populateServoGrid();
+                    populateCalibrationSelect();
+                    updateCalibrationUI();
+                }
+                else if (data.command === 'positionSet') {
+                    // Подтверждение установки позиции
+                    console.log(`Position set for servo ${data.servoIndex} to ${data.angle}°`);
+                }
+                else if (data.command === 'calibrated') {
+                    // Подтверждение калибровки
+                    console.log(`Calibration applied for servo ${data.servoIndex}`);
+                }
+                else if (data.command === 'frequencySet') {
+                    // Подтверждение установки частоты
+                    console.log(`PWM frequency set to ${data.frequency} Hz`);
+                }
+                else if (data.command === 'allCentered' || 
+                         data.command === 'allMin' || 
+                         data.command === 'allMax') {
+                    // Подтверждение групповой команды
+                    console.log(`Command "${data.command}" executed successfully`);
+                    updateSliderValues();
+                }
+                else if (data.command === 'settingsSaved') {
+                    // Подтверждение сохранения настроек
+                    console.log('Settings saved to non-volatile memory');
+                }
+            } catch (e) {
+                console.error('Error parsing WebSocket message:', e);
+            }
+        }
+        
+        // Отправка сообщения через WebSocket
+        function sendWebSocketMessage(message) {
+            if (websocket.readyState === WebSocket.OPEN) {
+                websocket.send(JSON.stringify(message));
+            } else {
+                console.warn('WebSocket not connected. Cannot send message.');
+            }
+        }
+        
+        // Создание и заполнение сетки сервоприводов
+        function populateServoGrid() {
+            const grid = document.getElementById('servo-grid');
+            grid.innerHTML = '';
+            
+            servoConfigs.forEach((config, index) => {
+                const card = document.createElement('div');
+                card.className = 'servo-card';
+                
+                const title = document.createElement('h3');
+                title.textContent = config.name;
+                
+                const sliderContainer = document.createElement('div');
+                sliderContainer.className = 'slider-container';
+                
+                const sliderLabel = document.createElement('label');
+                sliderLabel.htmlFor = `servo-slider-${index}`;
+                sliderLabel.textContent = 'Позиция:';
+                
+                const sliderValue = document.createElement('span');
+                sliderValue.className = 'slider-value';
+                sliderValue.textContent = `${config.currentPos}°`;
+                sliderValue.id = `servo-value-${index}`;
+                sliderLabel.appendChild(sliderValue);
+                
+                const slider = document.createElement('input');
+                slider.type = 'range';
+                slider.id = `servo-slider-${index}`;
+                slider.min = '0';
+                slider.max = '180';
+                slider.value = config.currentPos;
+                slider.style.width = '100%';
+                slider.oninput = function() {
+                    sliderValue.textContent = `${this.value}°`;
+                };
+                slider.onchange = function() {
+                    setServoPosition(index, parseInt(this.value));
+                };
+                
+                const buttonGroup = document.createElement('div');
+                buttonGroup.className = 'button-group';
+                
+                const centerButton = document.createElement('button');
+                centerButton.textContent = '90°';
+                centerButton.onclick = function() {
+                    setServoPosition(index, 90);
+                    slider.value = 90;
+                    sliderValue.textContent = '90°';
+                };
+                
+                const minButton = document.createElement('button');
+                minButton.textContent = '0°';
+                minButton.onclick = function() {
+                    setServoPosition(index, 0);
+                    slider.value = 0;
+                    sliderValue.textContent = '0°';
+                };
+                
+                const maxButton = document.createElement('button');
+                maxButton.textContent = '180°';
+                maxButton.onclick = function() {
+                    setServoPosition(index, 180);
+                    slider.value = 180;
+                    sliderValue.textContent = '180°';
+                };
+                
+                buttonGroup.appendChild(minButton);
+                buttonGroup.appendChild(centerButton);
+                buttonGroup.appendChild(maxButton);
+                
+                sliderContainer.appendChild(sliderLabel);
+                sliderContainer.appendChild(slider);
+                
+                card.appendChild(title);
+                card.appendChild(sliderContainer);
+                card.appendChild(buttonGroup);
+                
+                grid.appendChild(card);
+            });
+        }
+        
+        // Заполнение выпадающего списка для калибровки
+        function populateCalibrationSelect() {
+            const select = document.getElementById('calibration-servo');
+            select.innerHTML = '';
+            
+            servoConfigs.forEach((config, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = config.name;
+                select.appendChild(option);
+            });
+            
+            select.onchange = function() {
+                selectedServoIndex = parseInt(this.value);
+                updateCalibrationUI();
+            };
+        }
+        
+        // Обновление интерфейса калибровки
+        function updateCalibrationUI() {
+            if (servoConfigs.length > 0) {
+                const config = servoConfigs[selectedServoIndex];
+                
+                document.getElementById('servo-name').value = config.name;
+                document.getElementById('min-pulse').value = config.minPulse;
+                document.getElementById('max-pulse').value = config.maxPulse;
+                document.getElementById('center-offset').value = config.centerOffset;
+            }
+        }
+        
+        // Установка позиции сервопривода
+        function setServoPosition(servoIndex, angle) {
+            const message = {
+                command: 'setPosition',
+                servoIndex: servoIndex,
+                angle: angle
+            };
+            sendWebSocketMessage(message);
+        }
+        
+        // Применение калибровки
+        function applyCalibration() {
+            const servoName = document.getElementById('servo-name').value;
+            const minPulse = parseInt(document.getElementById('min-pulse').value);
+            const maxPulse = parseInt(document.getElementById('max-pulse').value);
+            const centerOffset = parseInt(document.getElementById('center-offset').value);
+            
+            const message = {
+                command: 'calibrate',
+                servoIndex: selectedServoIndex,
+                name: servoName,
+                minPulse: minPulse,
+                maxPulse: maxPulse,
+                centerOffset: centerOffset
+            };
+            
+            sendWebSocketMessage(message);
+            
+            // Обновляем локальные данные
+            servoConfigs[selectedServoIndex].name = servoName;
+            servoConfigs[selectedServoIndex].minPulse = minPulse;
+            servoConfigs[selectedServoIndex].maxPulse = maxPulse;
+            servoConfigs[selectedServoIndex].centerOffset = centerOffset;
+            
+            // Обновляем название в интерфейсе
+            populateServoGrid();
+            populateCalibrationSelect();
+        }
+        
+        // Функции для тестовых позиций
+        function testMinPosition() {
+            setServoPosition(selectedServoIndex, 0);
+        }
+        
+        function testCenterPosition() {
+            setServoPosition(selectedServoIndex, 90);
+        }
+        
+        function testMaxPosition() {
+            setServoPosition(selectedServoIndex, 180);
+        }
+        
+        // Установка частоты
+        function setFrequency() {
+            const frequency = parseInt(document.getElementById('frequency').value);
+            
+            if (frequency >= 40 && frequency <= 1000) {
+                const message = {
+                    command: 'setFrequency',
+                    frequency: frequency
+                };
+                sendWebSocketMessage(message);
+            } else {
+                alert('Частота должна быть в диапазоне от 40 до 1000 Гц');
+            }
+        }
+        
+        // Сохранение настроек
+        function saveSettings() {
+            const message = {
+                command: 'saveSettings'
+            };
+            sendWebSocketMessage(message);
+            
+            // Показываем уведомление
+            alert('Настройки сохранены в память устройства');
+        }
+        
+        // Общие команды для всех сервоприводов
+        function centerAll() {
+            const message = {
+                command: 'centerAll'
+            };
+            sendWebSocketMessage(message);
+        }
+        
+        function minAll() {
+            const message = {
+                command: 'minAll'
+            };
+            sendWebSocketMessage(message);
+        }
+        
+        function maxAll() {
+            const message = {
+                command: 'maxAll'
+            };
+            sendWebSocketMessage(message);
+        }
+        
+        // Обновление значений слайдеров
+        function updateSliderValues() {
+            servoConfigs.forEach((config, index) => {
+                const slider = document.getElementById(`servo-slider-${index}`);
+                const value = document.getElementById(`servo-value-${index}`);
+                
+                if (slider && value) {
+                    slider.value = config.currentPos;
+                    value.textContent = `${config.currentPos}°`;
+                }
+            });
+        }
+        
+        // Инициализация вкладок
+        function initTabs() {
+            const tabs = document.querySelectorAll('.tab');
+            const tabContents = document.querySelectorAll('.tab-content');
+            
+            tabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    const tabId = this.getAttribute('data-tab');
+                    
+                    // Деактивация всех вкладок
+                    tabs.forEach(t => t.classList.remove('active'));
+                    tabContents.forEach(tc => tc.classList.remove('active'));
+                    
+                    // Активация выбранной вкладки
+                    this.classList.add('active');
+                    document.getElementById(`${tabId}-tab`).classList.add('active');
+                });
+            });
+        }
+    </script>
+</body>
+</html>
